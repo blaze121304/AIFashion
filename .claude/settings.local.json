@@ -1,0 +1,11 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(mkdir -p \"C:/Users/blaze/IdeaProjects/AIFashion/app/src/main/java/com/example/aifashion/data/model\")",
+      "Bash(mkdir -p \"C:/Users/blaze/IdeaProjects/AIFashion/app/src/main/java/com/example/aifashion/data/api\")",
+      "Bash(mkdir -p \"C:/Users/blaze/IdeaProjects/AIFashion/app/src/main/java/com/example/aifashion/data/repository\")",
+      "Bash(mkdir -p \"C:/Users/blaze/IdeaProjects/AIFashion/app/src/main/java/com/example/aifashion/viewmodel\")",
+      "Bash(mkdir -p \"C:/Users/blaze/IdeaProjects/AIFashion/app/src/main/java/com/example/aifashion/service\")"
+    ]
+  }
+}
