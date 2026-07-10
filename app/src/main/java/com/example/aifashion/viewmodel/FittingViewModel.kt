@@ -1,20 +1,25 @@
 package com.example.aifashion.viewmodel
 
 import android.content.ContentResolver
+import android.content.Context
 import android.net.Uri
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.ViewModelProvider
 import androidx.lifecycle.viewModelScope
 import com.example.aifashion.data.api.RetrofitClient
 import com.example.aifashion.data.repository.FittingRepository
+import com.example.aifashion.util.GallerySaver
+import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.withContext
 import okhttp3.MediaType.Companion.toMediaType
 import okhttp3.MultipartBody
 import okhttp3.RequestBody.Companion.toRequestBody
+import java.net.URL
 
 /**
  * 피팅 UI 상태를 나타내는 Sealed Class
@@ -27,8 +32,8 @@ sealed class FittingUiState {
     /** API 요청 중 또는 폴링 중 */
     data class Loading(val message: String = "AI 피팅을 처리 중입니다...") : FittingUiState()
 
-    /** 피팅 완료 - result_image_url을 포함 */
-    data class Success(val resultImageUrl: String) : FittingUiState()
+    /** 피팅 완료 - result_image_url을 포함. savedUri는 결과 이미지를 갤러리에 저장한 뒤 캐시됨 */
+    data class Success(val resultImageUrl: String, val savedUri: Uri? = null) : FittingUiState()
 
     /** 오류 발생 */
     data class Error(val message: String) : FittingUiState()
@@ -50,10 +55,11 @@ class FittingViewModel(
      * 피팅 작업 제출 메인 함수
      * 이미지 URI → Multipart 변환 → POST 요청 → 폴링 시작
      *
-     * @param imageUri 크롭 완료된 이미지의 Uri
+     * @param imageUri 크롭 완료된 의류 이미지의 Uri
+     * @param bodyPhotoId 등록된 몸사진의 photo_id
      * @param contentResolver 이미지 바이트를 읽기 위한 ContentResolver
      */
-    fun submitFittingJob(imageUri: Uri, contentResolver: ContentResolver) {
+    fun submitFittingJob(imageUri: Uri, bodyPhotoId: String, contentResolver: ContentResolver) {
         viewModelScope.launch {
             _uiState.value = FittingUiState.Loading("서버에 이미지를 전송 중...")
 
@@ -70,11 +76,10 @@ class FittingViewModel(
                     filename = "fitting_image.jpg",
                     body = requestBody
                 )
-                val profileIdBody = "default_user_1"
-                    .toRequestBody("text/plain".toMediaType())
+                val bodyPhotoIdBody = bodyPhotoId.toRequestBody("text/plain".toMediaType())
 
                 // 3단계: POST /api/v1/fitting/jobs 요청 (HTTP 202 기대)
-                val response = repository.submitFittingJob(imagePart, profileIdBody)
+                val response = repository.submitFittingJob(imagePart, bodyPhotoIdBody)
 
                 if (response.isSuccessful && response.code() == 202) {
                     val jobId = response.body()?.job_id
@@ -168,6 +173,32 @@ class FittingViewModel(
      */
     fun reset() {
         _uiState.value = FittingUiState.Idle
+    }
+
+    /**
+     * 결과 이미지를 기기 갤러리에 저장하고 저장된 Uri를 반환
+     * 이미 저장된 적이 있으면(savedUri 존재) 재다운로드 없이 캐시된 값을 그대로 반환
+     * 저장/공유 버튼이 공통으로 사용
+     */
+    suspend fun ensureSavedImageUri(context: Context): Uri? {
+        val current = _uiState.value
+        if (current !is FittingUiState.Success) return null
+        current.savedUri?.let { return it }
+
+        return try {
+            val bytes = withContext(Dispatchers.IO) {
+                URL(current.resultImageUrl).openStream().use { it.readBytes() }
+            }
+            val uri = withContext(Dispatchers.IO) {
+                GallerySaver.saveImage(context, bytes, "ai_fitting_${System.currentTimeMillis()}.jpg")
+            }
+            if (uri != null && _uiState.value == current) {
+                _uiState.value = current.copy(savedUri = uri)
+            }
+            uri
+        } catch (e: Exception) {
+            null
+        }
     }
 
     /**

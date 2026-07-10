@@ -5,7 +5,10 @@
       "Bash(mkdir -p \"C:/Users/blaze/IdeaProjects/AIFashion/app/src/main/java/com/example/aifashion/data/api\")",
       "Bash(mkdir -p \"C:/Users/blaze/IdeaProjects/AIFashion/app/src/main/java/com/example/aifashion/data/repository\")",
       "Bash(mkdir -p \"C:/Users/blaze/IdeaProjects/AIFashion/app/src/main/java/com/example/aifashion/viewmodel\")",
-      "Bash(mkdir -p \"C:/Users/blaze/IdeaProjects/AIFashion/app/src/main/java/com/example/aifashion/service\")"
+      "Bash(mkdir -p \"C:/Users/blaze/IdeaProjects/AIFashion/app/src/main/java/com/example/aifashion/service\")",
+      "PowerShell(Get-Command *)",
+      "PowerShell(Get-ChildItem *)",
+      "PowerShell(& \"$env:LOCALAPPDATA\\\\Android\\\\Sdk\\\\platform-tools\\\\adb.exe\" devices)"
     ]
   }
 }

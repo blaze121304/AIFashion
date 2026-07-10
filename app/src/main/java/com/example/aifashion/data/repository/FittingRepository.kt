@@ -18,9 +18,9 @@ class FittingRepository(private val apiService: ApiService) {
      */
     suspend fun submitFittingJob(
         targetImage: MultipartBody.Part,
-        profileId: RequestBody
+        bodyPhotoId: RequestBody
     ): Response<JobSubmitResponse> {
-        return apiService.submitFittingJob(targetImage, profileId)
+        return apiService.submitFittingJob(targetImage, bodyPhotoId)
     }
 
     /**
