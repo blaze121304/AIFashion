@@ -1,8 +1,7 @@
 package com.example.aifashion.data.repository
 
 import com.example.aifashion.data.api.ApiService
-import com.example.aifashion.data.model.JobStatusResponse
-import com.example.aifashion.data.model.JobSubmitResponse
+import com.example.aifashion.data.model.VtonGenerateResponse
 import okhttp3.MultipartBody
 import okhttp3.RequestBody
 import retrofit2.Response
@@ -14,19 +13,13 @@ import retrofit2.Response
 class FittingRepository(private val apiService: ApiService) {
 
     /**
-     * 피팅 작업 생성 요청 위임
+     * 가상 피팅 생성 요청 위임 (동기 방식)
      */
-    suspend fun submitFittingJob(
-        targetImage: MultipartBody.Part,
-        bodyPhotoId: RequestBody
-    ): Response<JobSubmitResponse> {
-        return apiService.submitFittingJob(targetImage, bodyPhotoId)
-    }
-
-    /**
-     * 피팅 작업 상태 조회 위임
-     */
-    suspend fun getJobStatus(jobId: String): Response<JobStatusResponse> {
-        return apiService.getFittingJobStatus(jobId)
+    suspend fun generateFitting(
+        personImage: MultipartBody.Part,
+        garmentImage: MultipartBody.Part,
+        garmentType: RequestBody?
+    ): Response<VtonGenerateResponse> {
+        return apiService.generateFitting(personImage, garmentImage, garmentType)
     }
 }

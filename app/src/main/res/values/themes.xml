@@ -1,4 +1,11 @@
 <?xml version="1.0" encoding="utf-8"?>
-<resources>
+<resources xmlns:tools="http://schemas.android.com/tools">
     <style name="Theme.AIFashion" parent="android:Theme.Material.Light.NoActionBar"/>
+
+    <!-- uCrop(UCropActivity)은 시스템 바 인셋을 처리하지 않는 구버전 라이브러리라
+         Android 15+ 강제 edge-to-edge 적용 시 하단 툴바가 내비게이션 바에 가려짐.
+         해당 화면만 edge-to-edge를 명시적으로 opt-out. -->
+    <style name="Theme.AIFashion.UCrop" parent="Theme.AppCompat.Light.NoActionBar">
+        <item name="android:windowOptOutEdgeToEdgeEnforcement" tools:targetApi="35">true</item>
+    </style>
 </resources>

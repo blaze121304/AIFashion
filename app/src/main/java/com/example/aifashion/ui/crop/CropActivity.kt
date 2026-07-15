@@ -99,11 +99,14 @@ class CropActivity : AppCompatActivity() {
         }
 
         // uCrop 실행: 3:4 비율 강제 고정
+        // getIntent()는 항상 com.yalantis.ucrop.UCropActivity를 대상으로 만들어지므로,
+        // 상단 툴바를 숨기고 하단에 X/확인 버튼을 추가한 우리 서브클래스로 리다이렉트한다.
         val uCropIntent = UCrop.of(sourceUri, destinationUri)
             .withAspectRatio(3f, 4f)   // 가로:세로 = 3:4 고정
             .withMaxResultSize(1080, 1440) // 최대 해상도 제한 (VRAM 보호)
             .withOptions(options)
             .getIntent(this)
+            .apply { setClass(this@CropActivity, AIFashionUCropActivity::class.java) }
 
         uCropLauncher.launch(uCropIntent)
     }

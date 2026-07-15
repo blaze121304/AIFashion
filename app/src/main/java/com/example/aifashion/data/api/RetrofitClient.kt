@@ -12,8 +12,8 @@ import java.util.concurrent.TimeUnit
  */
 object RetrofitClient {
 
-    // TODO: 실제 서버 IP로 교체 필요 (에뮬레이터에서 localhost = 10.0.2.2)
-    private const val BASE_URL = "http://10.0.2.2:8000/"
+    // 배포 서버 (HTTPS, .claude/API.md 참고)
+    const val BASE_URL = "https://vfs.rusty.ai.kr/"
 
     private val loggingInterceptor = HttpLoggingInterceptor().apply {
         level = HttpLoggingInterceptor.Level.BODY

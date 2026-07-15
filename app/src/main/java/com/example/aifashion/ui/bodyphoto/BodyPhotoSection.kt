@@ -22,9 +22,10 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.unit.dp
 import coil.compose.AsyncImage
-import com.example.aifashion.data.model.BodyPhotoResponse
+import com.example.aifashion.data.model.LocalBodyPhoto
 import com.example.aifashion.viewmodel.BodyPhotoUiState
 import com.example.aifashion.viewmodel.MAX_BODY_PHOTOS
+import java.io.File
 
 /**
  * 화면 하단 1/5 영역: 내 몸 사진 카드 리스트 (최대 5장, 가로 스크롤)
@@ -42,7 +43,7 @@ fun BodyPhotoSection(
             .padding(horizontal = 12.dp, vertical = 4.dp)
     ) {
         Text(
-            text = "내 몸 사진 (${state.photos.size}/$MAX_BODY_PHOTOS)",
+            text = "피팅해볼 사진을 선택하세요. (${state.photos.size}/$MAX_BODY_PHOTOS)",
             style = MaterialTheme.typography.labelLarge
         )
 
@@ -60,12 +61,12 @@ fun BodyPhotoSection(
                 .fillMaxWidth()
                 .padding(top = 4.dp)
         ) {
-            items(state.photos, key = { it.photo_id }) { photo ->
+            items(state.photos, key = { it.photoId }) { photo ->
                 BodyPhotoCard(
                     photo = photo,
-                    isSelected = photo.photo_id == state.selectedPhotoId,
-                    onSelect = { onSelect(photo.photo_id) },
-                    onDelete = { onDelete(photo.photo_id) }
+                    isSelected = photo.photoId == state.selectedPhotoId,
+                    onSelect = { onSelect(photo.photoId) },
+                    onDelete = { onDelete(photo.photoId) }
                 )
             }
 
@@ -78,20 +79,20 @@ fun BodyPhotoSection(
 
 @Composable
 private fun BodyPhotoCard(
-    photo: BodyPhotoResponse,
+    photo: LocalBodyPhoto,
     isSelected: Boolean,
     onSelect: () -> Unit,
     onDelete: () -> Unit
 ) {
     Box(
         modifier = Modifier
-            .size(64.dp)
+            .size(128.dp)
             .clip(RoundedCornerShape(8.dp))
             .background(if (isSelected) MaterialTheme.colorScheme.primary else Color.Transparent)
             .padding(2.dp)
     ) {
         AsyncImage(
-            model = photo.image_url,
+            model = File(photo.filePath),
             contentDescription = "내 몸 사진",
             contentScale = ContentScale.Crop,
             modifier = Modifier
@@ -117,7 +118,7 @@ private fun BodyPhotoCard(
 private fun AddPhotoCard(onClick: () -> Unit) {
     Box(
         modifier = Modifier
-            .size(64.dp)
+            .size(128.dp)
             .clip(RoundedCornerShape(8.dp))
             .background(MaterialTheme.colorScheme.surfaceVariant)
             .clickable(onClick = onClick),

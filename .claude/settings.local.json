@@ -8,7 +8,15 @@
       "Bash(mkdir -p \"C:/Users/blaze/IdeaProjects/AIFashion/app/src/main/java/com/example/aifashion/service\")",
       "PowerShell(Get-Command *)",
       "PowerShell(Get-ChildItem *)",
-      "PowerShell(& \"$env:LOCALAPPDATA\\\\Android\\\\Sdk\\\\platform-tools\\\\adb.exe\" devices)"
+      "PowerShell(& \"$env:LOCALAPPDATA\\\\Android\\\\Sdk\\\\platform-tools\\\\adb.exe\" devices)",
+      "Bash(./gradlew.bat :app:assembleDebug -q)",
+      "Bash(gradle -v)",
+      "PowerShell(& \"C:\\\\Users\\\\rusty-lab\\\\.gradle\\\\wrapper\\\\dists\\\\gradle-9.4.0-bin\\\\lcvyxq3t37f6mx9miaydrrgs\\\\gradle-9.4.0\\\\bin\\\\gradle.bat\" :app:assembleDebug --console=plain 2>&1 | Select-Object -Last 150)",
+      "PowerShell(& \"C:\\\\Users\\\\rusty-lab\\\\.gradle\\\\wrapper\\\\dists\\\\gradle-9.4.0-bin\\\\lcvyxq3t37f6mx9miaydrrgs\\\\gradle-9.4.0\\\\bin\\\\gradle.bat\" :app:installDebug --console=plain 2>&1 | Select-Object -Last 60)",
+      "WebSearch",
+      "WebFetch(domain:raw.githubusercontent.com)",
+      "PowerShell(& \"C:\\\\Users\\\\rusty-lab\\\\.gradle\\\\wrapper\\\\dists\\\\gradle-9.4.0-bin\\\\lcvyxq3t37f6mx9miaydrrgs\\\\gradle-9.4.0\\\\bin\\\\gradle.bat\" :app:installDebug --console=plain 2>&1 | Select-Object -Last 40)",
+      "PowerShell(& \"C:\\\\Users\\\\rusty-lab\\\\.gradle\\\\wrapper\\\\dists\\\\gradle-9.4.0-bin\\\\lcvyxq3t37f6mx9miaydrrgs\\\\gradle-9.4.0\\\\bin\\\\gradle.bat\" :app:installDebug --console=plain 2>&1 | Select-Object -Last 80)"
     ]
   }
 }

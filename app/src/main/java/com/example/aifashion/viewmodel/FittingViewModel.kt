@@ -10,7 +10,6 @@ import com.example.aifashion.data.api.RetrofitClient
 import com.example.aifashion.data.repository.FittingRepository
 import com.example.aifashion.util.GallerySaver
 import kotlinx.coroutines.Dispatchers
-import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
@@ -19,6 +18,7 @@ import kotlinx.coroutines.withContext
 import okhttp3.MediaType.Companion.toMediaType
 import okhttp3.MultipartBody
 import okhttp3.RequestBody.Companion.toRequestBody
+import java.io.File
 import java.net.URL
 
 /**
@@ -29,8 +29,8 @@ sealed class FittingUiState {
     /** 초기 상태 또는 결과 확인 후 상태 */
     object Idle : FittingUiState()
 
-    /** API 요청 중 또는 폴링 중 */
-    data class Loading(val message: String = "AI 피팅을 처리 중입니다...") : FittingUiState()
+    /** API 요청 중 (서버가 동기 방식으로 응답하므로 최대 120초까지 소요될 수 있음) */
+    data class Loading(val message: String = "AI 피팅을 처리 중입니다... (최대 120초 소요)") : FittingUiState()
 
     /** 피팅 완료 - result_image_url을 포함. savedUri는 결과 이미지를 갤러리에 저장한 뒤 캐시됨 */
     data class Success(val resultImageUrl: String, val savedUri: Uri? = null) : FittingUiState()
@@ -52,44 +52,57 @@ class FittingViewModel(
     val uiState: StateFlow<FittingUiState> = _uiState.asStateFlow()
 
     /**
-     * 피팅 작업 제출 메인 함수
-     * 이미지 URI → Multipart 변환 → POST 요청 → 폴링 시작
+     * 피팅 요청. 서버(rf-ai-server)가 동기 방식으로 응답하므로(.claude/API.md)
+     * job 생성/폴링 없이 한 번의 요청으로 완료된다.
      *
-     * @param imageUri 크롭 완료된 의류 이미지의 Uri
-     * @param bodyPhotoId 등록된 몸사진의 photo_id
-     * @param contentResolver 이미지 바이트를 읽기 위한 ContentResolver
+     * @param garmentImageUri 크롭 완료된 의류 이미지의 Uri
+     * @param bodyPhotoFilePath 로컬에 저장된 몸사진 파일 경로
+     * @param garmentType 선택한 옷 종류 한국어 라벨 (미선택 시 null)
+     * @param contentResolver 의류 이미지 바이트를 읽기 위한 ContentResolver
      */
-    fun submitFittingJob(imageUri: Uri, bodyPhotoId: String, contentResolver: ContentResolver) {
+    fun submitFittingJob(
+        garmentImageUri: Uri,
+        bodyPhotoFilePath: String,
+        garmentType: String?,
+        contentResolver: ContentResolver
+    ) {
         viewModelScope.launch {
-            _uiState.value = FittingUiState.Loading("서버에 이미지를 전송 중...")
+            _uiState.value = FittingUiState.Loading()
 
             try {
-                // 1단계: Uri에서 이미지 바이트 배열 읽기
-                val imageBytes = contentResolver.openInputStream(imageUri)?.use {
+                val garmentBytes = contentResolver.openInputStream(garmentImageUri)?.use {
                     it.readBytes()
-                } ?: throw IllegalStateException("이미지 파일을 열 수 없습니다")
+                } ?: throw IllegalStateException("의류 이미지를 열 수 없습니다")
 
-                // 2단계: Multipart 파트 생성
-                val requestBody = imageBytes.toRequestBody("image/jpeg".toMediaType())
-                val imagePart = MultipartBody.Part.createFormData(
-                    name = "target_image",
-                    filename = "fitting_image.jpg",
-                    body = requestBody
+                val personFile = File(bodyPhotoFilePath)
+                if (!personFile.exists()) {
+                    throw IllegalStateException("몸사진 파일을 찾을 수 없습니다")
+                }
+                val personBytes = withContext(Dispatchers.IO) { personFile.readBytes() }
+
+                val garmentPart = MultipartBody.Part.createFormData(
+                    name = "garment_image",
+                    filename = "garment.jpg",
+                    body = garmentBytes.toRequestBody("image/jpeg".toMediaType())
                 )
-                val bodyPhotoIdBody = bodyPhotoId.toRequestBody("text/plain".toMediaType())
+                val personPart = MultipartBody.Part.createFormData(
+                    name = "person_image",
+                    filename = "person.jpg",
+                    body = personBytes.toRequestBody("image/jpeg".toMediaType())
+                )
+                val garmentTypeBody = garmentType?.toRequestBody("text/plain".toMediaType())
 
-                // 3단계: POST /api/v1/fitting/jobs 요청 (HTTP 202 기대)
-                val response = repository.submitFittingJob(imagePart, bodyPhotoIdBody)
+                val response = repository.generateFitting(personPart, garmentPart, garmentTypeBody)
 
-                if (response.isSuccessful && response.code() == 202) {
-                    val jobId = response.body()?.job_id
-                        ?: throw IllegalStateException("서버에서 job_id를 반환하지 않았습니다")
-
-                    // 4단계: 폴링 루프 시작
-                    startPolling(jobId)
+                if (response.isSuccessful) {
+                    val body = response.body()
+                        ?: throw IllegalStateException("서버 응답이 비어 있습니다")
+                    // result_image_url은 상대경로이므로 Base URL을 붙여야 실제 이미지에 접근 가능
+                    val absoluteUrl = RetrofitClient.BASE_URL.trimEnd('/') + body.result_image_url
+                    _uiState.value = FittingUiState.Success(absoluteUrl)
                 } else {
                     _uiState.value = FittingUiState.Error(
-                        "작업 생성 실패 (HTTP ${response.code()})"
+                        "피팅 요청 실패 (HTTP ${response.code()})"
                     )
                 }
 
@@ -99,73 +112,6 @@ class FittingViewModel(
                 )
             }
         }
-    }
-
-    /**
-     * 3초 간격 폴링 루프
-     * status가 "completed" 또는 "failed"가 될 때까지 반복 조회
-     *
-     * @param jobId 추적할 작업 ID
-     */
-    private suspend fun startPolling(jobId: String) {
-        _uiState.value = FittingUiState.Loading("AI가 의상을 분석 중입니다... (job: $jobId)")
-
-        // 최대 폴링 횟수: 무한 루프 방지 (3초 × 60회 = 최대 3분)
-        var pollCount = 0
-        val maxPollCount = 60
-
-        while (pollCount < maxPollCount) {
-            // 3초 대기 후 상태 조회
-            delay(3000L)
-            pollCount++
-
-            try {
-                val response = repository.getJobStatus(jobId)
-
-                if (!response.isSuccessful) {
-                    _uiState.value = FittingUiState.Error(
-                        "상태 조회 실패 (HTTP ${response.code()})"
-                    )
-                    return
-                }
-
-                val jobStatus = response.body() ?: continue
-
-                when (jobStatus.status) {
-                    "completed" -> {
-                        // 성공: result_image_url이 반드시 존재해야 함
-                        val resultUrl = jobStatus.result_image_url
-                            ?: run {
-                                _uiState.value = FittingUiState.Error("결과 이미지 URL이 없습니다")
-                                return
-                            }
-                        _uiState.value = FittingUiState.Success(resultUrl)
-                        return // 폴링 종료
-                    }
-
-                    "failed" -> {
-                        _uiState.value = FittingUiState.Error("AI 처리에 실패했습니다")
-                        return // 폴링 종료
-                    }
-
-                    "processing" -> {
-                        // 아직 처리 중 - 계속 폴링
-                        _uiState.value = FittingUiState.Loading(
-                            "처리 중... ($pollCount/${maxPollCount}회 확인)"
-                        )
-                    }
-                }
-
-            } catch (e: Exception) {
-                _uiState.value = FittingUiState.Error(
-                    "폴링 오류: ${e.message}"
-                )
-                return
-            }
-        }
-
-        // 타임아웃
-        _uiState.value = FittingUiState.Error("처리 시간이 초과되었습니다 (3분)")
     }
 
     /**

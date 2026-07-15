@@ -9,6 +9,8 @@ import android.content.Intent
 import android.database.ContentObserver
 import android.graphics.Color
 import android.graphics.PixelFormat
+import android.graphics.Typeface
+import android.graphics.drawable.GradientDrawable
 import android.net.Uri
 import android.os.Handler
 import android.os.IBinder
@@ -148,17 +150,27 @@ class CaptureDetectionService : Service() {
             PixelFormat.TRANSLUCENT
         ).apply {
             gravity = Gravity.BOTTOM or Gravity.END
-            x = 48   // 우측 여백
-            y = 120  // 하단 여백
+            x = 50  // 우측 여백
+            y = 300  // 하단 여백
         }
 
-        // 플로팅 버튼 생성 및 스타일 설정
+        // 플로팅 버튼 생성 및 스타일 설정 (알약 모양 + 테두리 + 그림자로 시인성 확보)
         val button = Button(this).apply {
             text = "이 옷 입어보기 👕"
-            textSize = 14f
-            setBackgroundColor(Color.parseColor("#FF6B35"))
+            textSize = 15f
+            typeface = Typeface.create(Typeface.DEFAULT, Typeface.BOLD)
+            isAllCaps = false
             setTextColor(Color.WHITE)
-            setPadding(40, 24, 40, 24)
+            setPadding(56, 32, 56, 32)
+            stateListAnimator = null
+
+            background = GradientDrawable().apply {
+                shape = GradientDrawable.RECTANGLE
+                cornerRadius = 999f
+                setColor(Color.parseColor("#2979FF"))
+                setStroke(6, Color.WHITE)
+            }
+            elevation = 16f
 
             setOnClickListener {
                 // 클릭 시: 버튼 제거 후 CropActivity 실행

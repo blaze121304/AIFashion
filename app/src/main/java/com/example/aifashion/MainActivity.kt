@@ -121,9 +121,20 @@ class MainActivity : ComponentActivity() {
                         fittingViewModel = fittingViewModel,
                         bodyPhotoViewModel = bodyPhotoViewModel,
                         onStartFitting = { bodyPhotoId ->
-                            // 피팅 시작: ViewModel에 크롭 이미지 URI + 선택된 몸사진 ID 전달
+                            // 피팅 시작: ViewModel에 크롭 이미지 URI + 선택된 몸사진의 로컬 파일 경로 전달
+                            // (서버에 몸사진 등록 API가 없어 매 요청마다 실제 파일을 첨부해야 함, .claude/API.md 참고)
                             croppedImageUri?.let { uri ->
-                                fittingViewModel.submitFittingJob(uri, bodyPhotoId, contentResolver)
+                                val filePath = bodyPhotoViewModel.uiState.value.photos
+                                    .find { it.photoId == bodyPhotoId }
+                                    ?.filePath
+                                if (filePath != null) {
+                                    fittingViewModel.submitFittingJob(
+                                        garmentImageUri = uri,
+                                        bodyPhotoFilePath = filePath,
+                                        garmentType = null,
+                                        contentResolver = contentResolver
+                                    )
+                                }
                             }
                         },
                         onReset = {
@@ -224,8 +235,8 @@ class MainActivity : ComponentActivity() {
 // ──────────────────────────────────────────────────────────────────────────────
 
 /**
- * 메인 화면: 세로 4:1 분할
- * 상단(4) = 옷 캡처/피팅 영역, 하단(1) = 내 몸 사진 카드 섹션
+ * 메인 화면: 세로 2:1 분할
+ * 상단(3) = 옷 캡처/피팅 영역, 하단(1.5) = 내 몸 사진 카드 섹션
  */
 @Composable
 fun MainScreen(
@@ -239,7 +250,7 @@ fun MainScreen(
     val bodyPhotoState by bodyPhotoViewModel.uiState.collectAsStateWithLifecycle()
 
     Column(modifier = Modifier.fillMaxSize()) {
-        Box(modifier = Modifier.weight(4f)) {
+        Box(modifier = Modifier.weight(3f)) {
             FittingScreen(
                 croppedImageUri = croppedImageUri,
                 viewModel = fittingViewModel,
@@ -251,7 +262,8 @@ fun MainScreen(
 
         HorizontalDivider()
 
-        Box(modifier = Modifier.weight(1f)) {
+        // 몸 사진이 잘 안 보인다는 피드백으로 기존(weight 1) 대비 확대했다가, 조금 낮춤
+        Box(modifier = Modifier.weight(1.1f)) {
             BodyPhotoSection(
                 state = bodyPhotoState,
                 onSelect = bodyPhotoViewModel::selectPhoto,
@@ -279,6 +291,30 @@ fun FittingScreen(
     val context = LocalContext.current
     val scope = rememberCoroutineScope()
 
+    // 대기 상태 + 캡처된 이미지 없음 = 첫 진입 화면. 안내 문구를 화면 중앙에 보여준다.
+    if (uiState is FittingUiState.Idle && croppedImageUri == null) {
+        Column(
+            modifier = Modifier
+                .fillMaxSize()
+                .padding(16.dp),
+            horizontalAlignment = Alignment.CenterHorizontally,
+            verticalArrangement = Arrangement.Center
+        ) {
+            Text(
+                text = "의류 이미지를 스크린샷으로 캡처해보세요!",
+                style = MaterialTheme.typography.bodyLarge,
+                textAlign = TextAlign.Center
+            )
+            Text(
+                text = "캡처 후 화면 우측 하단의 \"이 옷 입어보기 👕\" 실행!",
+                style = MaterialTheme.typography.bodyMedium,
+                textAlign = TextAlign.Center,
+                color = MaterialTheme.colorScheme.onSurfaceVariant
+            )
+        }
+        return
+    }
+
     Column(
         modifier = Modifier
             .fillMaxSize()
@@ -287,64 +323,43 @@ fun FittingScreen(
         horizontalAlignment = Alignment.CenterHorizontally,
         verticalArrangement = Arrangement.spacedBy(16.dp)
     ) {
-        Text(
-            text = "AI 가상 피팅",
-            style = MaterialTheme.typography.headlineMedium
-        )
-
         when (val state = uiState) {
 
-            // ── 대기 상태: 크롭된 이미지 표시 또는 안내 메시지 ──
+            // ── 대기 상태: 크롭된 이미지 표시 (미선택 안내는 위에서 이미 처리) ──
             is FittingUiState.Idle -> {
-                if (croppedImageUri != null) {
-                    // 크롭된 이미지 미리보기
-                    Text("선택된 의류 이미지", style = MaterialTheme.typography.titleMedium)
+                // 크롭된 이미지 미리보기
+                Text("선택된 의류 이미지", style = MaterialTheme.typography.titleMedium)
 
-                    AsyncImage(
-                        model = croppedImageUri,
-                        contentDescription = "크롭된 의류 이미지",
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .aspectRatio(3f / 4f),
-                        contentScale = ContentScale.Crop
-                    )
+                AsyncImage(
+                    model = croppedImageUri,
+                    contentDescription = "크롭된 의류 이미지",
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .aspectRatio(3f / 4f),
+                    contentScale = ContentScale.Crop
+                )
 
-                    Button(
-                        onClick = { selectedBodyPhotoId?.let(onStartFitting) },
-                        enabled = selectedBodyPhotoId != null,
-                        modifier = Modifier.fillMaxWidth()
-                    ) {
-                        Text("👗 AI 피팅 시작")
-                    }
+                Button(
+                    onClick = { selectedBodyPhotoId?.let(onStartFitting) },
+                    enabled = selectedBodyPhotoId != null,
+                    modifier = Modifier.fillMaxWidth()
+                ) {
+                    Text("👗 AI 피팅 시작")
+                }
 
-                    if (selectedBodyPhotoId == null) {
-                        Text(
-                            text = "아래에서 내 몸 사진을 먼저 등록/선택해주세요",
-                            style = MaterialTheme.typography.bodySmall,
-                            color = MaterialTheme.colorScheme.error
-                        )
-                    }
-
-                    OutlinedButton(
-                        onClick = onReset,
-                        modifier = Modifier.fillMaxWidth()
-                    ) {
-                        Text("다시 선택")
-                    }
-                } else {
-                    // 이미지 미선택 안내
-                    Spacer(modifier = Modifier.height(24.dp))
+                if (selectedBodyPhotoId == null) {
                     Text(
-                        text = "📱 다른 앱에서 의류 이미지를\n스크린샷으로 캡처해보세요!",
-                        style = MaterialTheme.typography.bodyLarge,
-                        textAlign = TextAlign.Center
+                        text = "아래에서 내 몸 사진을 먼저 등록/선택해주세요",
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.error
                     )
-                    Text(
-                        text = "캡처 후 화면 우측 하단의\n\"이 옷 입어보기 👕\" 버튼을 눌러주세요",
-                        style = MaterialTheme.typography.bodyMedium,
-                        textAlign = TextAlign.Center,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant
-                    )
+                }
+
+                OutlinedButton(
+                    onClick = onReset,
+                    modifier = Modifier.fillMaxWidth()
+                ) {
+                    Text("다시 선택")
                 }
             }
 

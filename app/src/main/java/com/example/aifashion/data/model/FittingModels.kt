@@ -1,19 +1,13 @@
 package com.example.aifashion.data.model
 
 /**
- * POST /api/v1/fitting/jobs 응답 모델
- * AI 피팅 작업 생성 성공 시 job_id를 반환받음
+ * POST /api/v1/vton/generate 응답 모델 (.claude/API.md 참고)
+ * 서버가 동기 방식으로 한 번에 결과를 반환한다 (job 생성/폴링 없음)
  */
-data class JobSubmitResponse(
-    val job_id: String
-)
-
-/**
- * GET /api/v1/fitting/jobs/{job_id} 응답 모델
- * 폴링으로 작업 상태를 확인할 때 사용
- */
-data class JobStatusResponse(
-    val job_id: String,
-    val status: String,          // "processing" | "completed" | "failed"
-    val result_image_url: String? // status가 "completed"일 때만 존재
+data class VtonGenerateResponse(
+    val status: String,
+    val result_image_url: String, // 상대경로. Base URL을 붙여서 GET 요청해야 실제 이미지를 받을 수 있음
+    val garment_description: String? = null,
+    val negative_prompt: String? = null,
+    val segmentation_prompt: String? = null
 )

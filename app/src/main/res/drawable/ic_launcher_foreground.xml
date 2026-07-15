@@ -4,8 +4,16 @@
     android:height="108dp"
     android:viewportWidth="108"
     android:viewportHeight="108">
-    <!-- Shopping bag icon -->
+    <!-- 8-bit / pixel-art style shirt, blocky blue-on-blue game sprite look -->
     <path
         android:fillColor="#FFFFFF"
-        android:pathData="M72,47L72,40C72,27.3 61.7,17 49,17C36.3,17 26,27.3 26,40L26,47L16,47L16,91L82,91L82,47ZM35,40C35,32.3 41.3,26 49,26C56.7,26 63,32.3 63,40L63,47L35,47ZM35,56C35,53.8 36.8,52 39,52C41.2,52 43,53.8 43,56C43,58.2 41.2,60 39,60C36.8,60 35,58.2 35,56ZM59,56C59,53.8 60.8,52 63,52C65.2,52 67,53.8 67,56C67,58.2 65.2,60 63,60C60.8,60 59,58.2 59,56Z"/>
+        android:pathData="M32.4,18h43.2v7.2h-43.2Z
+                           M18,25.2h28.8v7.2h-28.8Z
+                           M61.2,25.2h28.8v7.2h-28.8Z
+                           M18,32.4h72v7.2h-72Z
+                           M25.2,39.6h57.6v50.4h-57.6Z"/>
+    <!-- collar notch accent (game-dot style inset block) -->
+    <path
+        android:fillColor="#64B5F6"
+        android:pathData="M46.8,25.2h14.4v7.2h-14.4Z"/>
 </vector>

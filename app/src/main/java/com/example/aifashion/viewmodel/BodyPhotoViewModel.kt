@@ -8,30 +8,29 @@ import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.ViewModelProvider
 import androidx.lifecycle.viewModelScope
-import com.example.aifashion.data.AppConfig
-import com.example.aifashion.data.api.RetrofitClient
-import com.example.aifashion.data.model.BodyPhotoResponse
+import com.example.aifashion.data.model.LocalBodyPhoto
 import com.example.aifashion.data.repository.BodyPhotoRepository
+import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.launch
-import okhttp3.MediaType.Companion.toMediaType
-import okhttp3.MultipartBody
-import okhttp3.RequestBody.Companion.toRequestBody
+import kotlinx.coroutines.withContext
 
 /** 몸사진 카드 리스트 최대 개수 */
 const val MAX_BODY_PHOTOS = 5
 
 data class BodyPhotoUiState(
-    val photos: List<BodyPhotoResponse> = emptyList(),
+    val photos: List<LocalBodyPhoto> = emptyList(),
     val selectedPhotoId: String? = null,
     val isLoading: Boolean = false,
     val errorMessage: String? = null
 )
 
 /**
- * 몸사진 등록/조회/삭제/선택을 담당하는 ViewModel
+ * 몸사진 등록/조회/삭제/선택을 담당하는 ViewModel.
+ * 서버에는 몸사진을 등록하는 API가 없어(.claude/API.md 참고) 기기 로컬 저장소에만 보관하고,
+ * 피팅 요청 시 매번 파일로 첨부해서 보낸다.
  * 선택된 photo_id는 SharedPreferences에 저장되어 앱 재실행 후에도 유지됨
  */
 class BodyPhotoViewModel(
@@ -48,40 +47,25 @@ class BodyPhotoViewModel(
         loadPhotos()
     }
 
-    /** 서버에서 몸사진 목록을 불러오고, 로컬에 저장된 선택 상태를 복원 */
+    /** 로컬 저장소에서 몸사진 목록을 불러오고, 저장된 선택 상태를 복원 */
     fun loadPhotos() {
         viewModelScope.launch {
             _uiState.value = _uiState.value.copy(isLoading = true, errorMessage = null)
-            try {
-                val response = repository.getPhotos(AppConfig.DEFAULT_USER_ID)
-                if (response.isSuccessful) {
-                    val photos = response.body()?.photos.orEmpty()
-                    val savedSelectedId = prefs.getString(KEY_SELECTED_PHOTO_ID, null)
-                    val selectedId = savedSelectedId
-                        ?.takeIf { id -> photos.any { it.photo_id == id } }
-                        ?: photos.firstOrNull()?.photo_id
-                    _uiState.value = _uiState.value.copy(
-                        photos = photos,
-                        selectedPhotoId = selectedId,
-                        isLoading = false
-                    )
-                    persistSelectedPhotoId(selectedId)
-                } else {
-                    _uiState.value = _uiState.value.copy(
-                        isLoading = false,
-                        errorMessage = "몸사진 목록을 불러오지 못했습니다 (HTTP ${response.code()})"
-                    )
-                }
-            } catch (e: Exception) {
-                _uiState.value = _uiState.value.copy(
-                    isLoading = false,
-                    errorMessage = e.message ?: "몸사진 목록 조회 중 오류가 발생했습니다"
-                )
-            }
+            val photos = withContext(Dispatchers.IO) { repository.getPhotos() }
+            val savedSelectedId = prefs.getString(KEY_SELECTED_PHOTO_ID, null)
+            val selectedId = savedSelectedId
+                ?.takeIf { id -> photos.any { it.photoId == id } }
+                ?: photos.firstOrNull()?.photoId
+            _uiState.value = _uiState.value.copy(
+                photos = photos,
+                selectedPhotoId = selectedId,
+                isLoading = false
+            )
+            persistSelectedPhotoId(selectedId)
         }
     }
 
-    /** 사진첩에서 고른 이미지를 서버에 등록 (최대 5장 제한) */
+    /** 사진첩에서 고른 이미지를 로컬 저장소에 등록 (최대 5장 제한) */
     fun uploadPhoto(imageUri: Uri, contentResolver: ContentResolver) {
         val current = _uiState.value
         if (current.photos.size >= MAX_BODY_PHOTOS) {
@@ -94,32 +78,16 @@ class BodyPhotoViewModel(
         viewModelScope.launch {
             _uiState.value = _uiState.value.copy(isLoading = true, errorMessage = null)
             try {
-                val bytes = contentResolver.openInputStream(imageUri)?.use { it.readBytes() }
-                    ?: throw IllegalStateException("이미지 파일을 열 수 없습니다")
-
-                val photoPart = MultipartBody.Part.createFormData(
-                    name = "photo",
-                    filename = "body_${System.currentTimeMillis()}.jpg",
-                    body = bytes.toRequestBody("image/jpeg".toMediaType())
-                )
-                val userIdBody = AppConfig.DEFAULT_USER_ID.toRequestBody("text/plain".toMediaType())
-
-                val response = repository.registerPhoto(photoPart, userIdBody)
-                val newPhoto = response.body()
-                if (response.isSuccessful && newPhoto != null) {
-                    val updatedPhotos = _uiState.value.photos + newPhoto
-                    _uiState.value = _uiState.value.copy(
-                        photos = updatedPhotos,
-                        selectedPhotoId = newPhoto.photo_id,
-                        isLoading = false
-                    )
-                    persistSelectedPhotoId(newPhoto.photo_id)
-                } else {
-                    _uiState.value = _uiState.value.copy(
-                        isLoading = false,
-                        errorMessage = "몸사진 등록 실패 (HTTP ${response.code()})"
-                    )
+                val newPhoto = withContext(Dispatchers.IO) {
+                    repository.addPhoto(imageUri, contentResolver)
                 }
+                val updatedPhotos = _uiState.value.photos + newPhoto
+                _uiState.value = _uiState.value.copy(
+                    photos = updatedPhotos,
+                    selectedPhotoId = newPhoto.photoId,
+                    isLoading = false
+                )
+                persistSelectedPhotoId(newPhoto.photoId)
             } catch (e: Exception) {
                 _uiState.value = _uiState.value.copy(
                     isLoading = false,
@@ -132,34 +100,18 @@ class BodyPhotoViewModel(
     /** 몸사진 삭제. 선택된 사진이 삭제되면 다음 사진으로 선택 갱신 */
     fun deletePhoto(photoId: String) {
         viewModelScope.launch {
-            _uiState.value = _uiState.value.copy(isLoading = true, errorMessage = null)
-            try {
-                val response = repository.deletePhoto(photoId)
-                if (response.isSuccessful) {
-                    val updatedPhotos = _uiState.value.photos.filterNot { it.photo_id == photoId }
-                    val updatedSelectedId = if (_uiState.value.selectedPhotoId == photoId) {
-                        updatedPhotos.firstOrNull()?.photo_id
-                    } else {
-                        _uiState.value.selectedPhotoId
-                    }
-                    _uiState.value = _uiState.value.copy(
-                        photos = updatedPhotos,
-                        selectedPhotoId = updatedSelectedId,
-                        isLoading = false
-                    )
-                    persistSelectedPhotoId(updatedSelectedId)
-                } else {
-                    _uiState.value = _uiState.value.copy(
-                        isLoading = false,
-                        errorMessage = "몸사진 삭제 실패 (HTTP ${response.code()})"
-                    )
-                }
-            } catch (e: Exception) {
-                _uiState.value = _uiState.value.copy(
-                    isLoading = false,
-                    errorMessage = e.message ?: "몸사진 삭제 중 오류가 발생했습니다"
-                )
+            withContext(Dispatchers.IO) { repository.deletePhoto(photoId) }
+            val updatedPhotos = _uiState.value.photos.filterNot { it.photoId == photoId }
+            val updatedSelectedId = if (_uiState.value.selectedPhotoId == photoId) {
+                updatedPhotos.firstOrNull()?.photoId
+            } else {
+                _uiState.value.selectedPhotoId
             }
+            _uiState.value = _uiState.value.copy(
+                photos = updatedPhotos,
+                selectedPhotoId = updatedSelectedId
+            )
+            persistSelectedPhotoId(updatedSelectedId)
         }
     }
 
@@ -186,7 +138,7 @@ class BodyPhotoViewModel(
     class Factory(private val application: Application) : ViewModelProvider.Factory {
         @Suppress("UNCHECKED_CAST")
         override fun <T : ViewModel> create(modelClass: Class<T>): T {
-            val repository = BodyPhotoRepository(RetrofitClient.apiService)
+            val repository = BodyPhotoRepository(application)
             return BodyPhotoViewModel(application, repository) as T
         }
     }
